@@ -15,6 +15,7 @@ import {
   Plus,
   Settings as SettingsIcon,
   Trash2,
+  Volume2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import {
   scoreColor,
   segmentSentences,
 } from "@/lib/polyglot";
+import { isTTSSupported, useTTS } from "@/lib/useTTS";
 import { cn } from "@/lib/utils";
 
 type SentenceState = Sentence & {
@@ -52,6 +54,9 @@ const defaultSettings: Settings = {
   apiBase: "https://api.openai.com/v1",
   model: "gpt-4o-mini",
   level: "",
+  ttsEnabled: true,
+  ttsVoiceURI: "",
+  ttsRate: 1.0,
 };
 
 // Animated score number that rolls up/down to the target value
@@ -97,6 +102,11 @@ export default function Home() {
   const timersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const refreshKeyRef = useRef(0);
   const selectedSessionIdRef = useRef<number | null>(null);
+
+  const { playingId, speak } = useTTS(
+    settings.ttsVoiceURI,
+    settings.ttsRate,
+  );
 
   useEffect(() => {
     selectedSessionIdRef.current = selectedSessionId;
@@ -627,9 +637,37 @@ export default function Home() {
                     className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:grid-cols-[1fr_220px]"
                   >
                     <div className="space-y-2">
-                      <p className="text-sm font-medium leading-relaxed">
-                        {index + 1}. {sentence.original}
-                      </p>
+                      {(() => {
+                        const sentenceLabel = `${index + 1}. ${sentence.original}`;
+                        return (
+                          <div className="flex items-start gap-2">
+                            <p className="flex-1 text-sm font-medium leading-relaxed">
+                              {sentenceLabel}
+                            </p>
+                            {settings.ttsEnabled && isTTSSupported() && (
+                              <button
+                                type="button"
+                                title="朗读原文"
+                                aria-label="朗读原文"
+                                onClick={() => speak(sentence.id, sentenceLabel)}
+                                className={cn(
+                                  "mt-0.5 shrink-0 rounded p-1 transition-colors",
+                                  playingId === sentence.id
+                                    ? "text-primary"
+                                    : "text-muted-foreground hover:text-foreground",
+                                )}
+                              >
+                                <Volume2
+                                  className={cn(
+                                    "h-4 w-4",
+                                    playingId === sentence.id && "animate-pulse",
+                                  )}
+                                />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <Input
                         value={sentence.translation}
                         onChange={(event) =>
