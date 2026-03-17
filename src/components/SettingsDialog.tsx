@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import {
   Download,
@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Upload,
+  Volume2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,11 +25,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Sentence, type Session, db } from "@/lib/db";
+import { cleanTTSText, isTTSSupported } from "@/lib/useTTS";
 
 export type Settings = {
   apiKey: string;
   apiBase: string;
   model: string;
+  ttsEnabled: boolean;
+  ttsVoiceURI: string;
+  ttsRate: number;
 };
 
 type SettingsDialogProps = {
@@ -61,7 +66,34 @@ export function SettingsDialog({
   const [probing, setProbing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ttsSupported = isTTSSupported();
+
+  useEffect(() => {
+    if (!ttsSupported) return;
+    function loadVoices() {
+      setVoices(window.speechSynthesis.getVoices());
+    }
+    loadVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
+    };
+  }, [ttsSupported]);
+
+  function previewVoice() {
+    if (!ttsSupported) return;
+    window.speechSynthesis.cancel();
+    const text = cleanTTSText("1. 这是所选语音的预览效果。");
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = settings.ttsRate;
+    if (settings.ttsVoiceURI) {
+      const voice = voices.find((v) => v.voiceURI === settings.ttsVoiceURI);
+      if (voice) utterance.voice = voice;
+    }
+    window.speechSynthesis.speak(utterance);
+  }
 
   async function probeModels() {
     if (!settings.apiKey.trim()) return;
@@ -153,6 +185,9 @@ export function SettingsDialog({
           apiKey: imported.apiKey ?? settings.apiKey,
           apiBase: imported.apiBase ?? settings.apiBase,
           model: imported.model ?? settings.model,
+          ttsEnabled: imported.ttsEnabled ?? settings.ttsEnabled,
+          ttsVoiceURI: imported.ttsVoiceURI ?? settings.ttsVoiceURI,
+          ttsRate: imported.ttsRate ?? settings.ttsRate,
         };
         onSettingsChange(merged);
         window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
@@ -235,6 +270,9 @@ export function SettingsDialog({
             <TabsTrigger value="preferences" className="flex-1">
               偏好设置
             </TabsTrigger>
+            <TabsTrigger value="voice" className="flex-1">
+              语音
+            </TabsTrigger>
             <TabsTrigger value="data" className="flex-1">
               数据安全
             </TabsTrigger>
@@ -312,6 +350,108 @@ export function SettingsDialog({
                 </Button>
               </div>
             </div>
+          </TabsContent>
+
+          {/* ── Voice / TTS Tab ── */}
+          <TabsContent value="voice" className="space-y-4">
+            {!ttsSupported ? (
+              <p className="text-sm text-muted-foreground">
+                您的浏览器不支持 Web Speech API，语音功能不可用。
+              </p>
+            ) : (
+              <>
+                {/* TTS Enable toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">启用朗读功能</label>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={settings.ttsEnabled}
+                    onClick={() =>
+                      onSettingsChange({
+                        ...settings,
+                        ttsEnabled: !settings.ttsEnabled,
+                      })
+                    }
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      settings.ttsEnabled ? "bg-primary" : "bg-input"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                        settings.ttsEnabled
+                          ? "translate-x-5"
+                          : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Voice selector */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">语音来源</label>
+                  <div className="flex gap-2">
+                    <select
+                      className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                      value={settings.ttsVoiceURI}
+                      onChange={(e) =>
+                        onSettingsChange({
+                          ...settings,
+                          ttsVoiceURI: e.target.value,
+                        })
+                      }
+                      disabled={!settings.ttsEnabled}
+                    >
+                      <option value="">默认语音</option>
+                      {voices.map((voice) => (
+                        <option key={voice.voiceURI} value={voice.voiceURI}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={previewVoice}
+                      disabled={!settings.ttsEnabled}
+                      title="预览语音"
+                    >
+                      <Volume2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Speech rate slider */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">语速</label>
+                    <span className="text-sm tabular-nums text-muted-foreground">
+                      {settings.ttsRate.toFixed(1)}x
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={2.0}
+                    step={0.1}
+                    value={settings.ttsRate}
+                    onChange={(e) =>
+                      onSettingsChange({
+                        ...settings,
+                        ttsRate: parseFloat(e.target.value),
+                      })
+                    }
+                    disabled={!settings.ttsEnabled}
+                    className="w-full accent-primary disabled:opacity-50"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>0.5x</span>
+                    <span>2.0x</span>
+                  </div>
+                </div>
+              </>
+            )}
           </TabsContent>
 
           {/* ── Data Management Tab ── */}
