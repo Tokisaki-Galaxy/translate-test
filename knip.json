@@ -1,7 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/index.{js,ts,html}", "src/main.{js,ts}"],
-  "project": ["src/**/*.{js,ts}"],
-  "ignore": ["**/*.d.ts"],
-  "ignoreDependencies": ["xvfb", "ripgrep", "tree"]
+  "entry": ["src/app/page.tsx", "src/app/api/**/*.ts"],
+  "project": ["src/**/*.{js,ts,tsx}", "*.ts", "*.mjs"],
+  "ignore": ["**/*.d.ts", "src/mocks/**"],
+  "ignoreDependencies": ["xvfb", "ripgrep", "tree", "tailwindcss", "postcss"],
+  "ignoreBinaries": ["playwright", "prettier", "knip"]
 }
