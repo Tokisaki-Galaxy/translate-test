@@ -29,4 +29,11 @@ describe("parseModelResponse", () => {
       "Invalid score format",
     );
   });
+
+  it("parses score when LLM adds prefix text before pipe", () => {
+    expect(parseModelResponse("分值: 65.00|漏译了核心动词")).toEqual({
+      score: 65,
+      feedback: "漏译了核心动词",
+    });
+  });
 });

@@ -57,7 +57,8 @@ export function parseModelResponse(content: string): {
 
   const rawScore = normalized.substring(0, separatorIndex).trim();
   const feedback = normalized.substring(separatorIndex + 1).trim();
-  const score = Number(rawScore);
+  const scoreMatch = rawScore.match(/(\d+(?:\.\d+)?)/);
+  const score = scoreMatch ? Number(scoreMatch[1]) : NaN;
 
   if (!Number.isFinite(score)) {
     throw new Error("Invalid score format");

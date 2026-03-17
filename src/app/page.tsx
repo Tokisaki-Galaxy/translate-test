@@ -51,6 +51,7 @@ const defaultSettings: Settings = {
   apiKey: "",
   apiBase: "https://api.openai.com/v1",
   model: "gpt-4o-mini",
+  level: "",
 };
 
 // Animated score number that rolls up/down to the target value
@@ -306,6 +307,7 @@ export default function Home() {
           apiKey: settings.apiKey,
           apiBase: settings.apiBase,
           model: settings.model,
+          level: settings.level,
         }),
       });
 

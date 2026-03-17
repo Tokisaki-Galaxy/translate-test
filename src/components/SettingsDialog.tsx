@@ -29,6 +29,7 @@ export type Settings = {
   apiKey: string;
   apiBase: string;
   model: string;
+  level: string;
 };
 
 type SettingsDialogProps = {
@@ -153,6 +154,7 @@ export function SettingsDialog({
           apiKey: imported.apiKey ?? settings.apiKey,
           apiBase: imported.apiBase ?? settings.apiBase,
           model: imported.model ?? settings.model,
+          level: imported.level ?? settings.level,
         };
         onSettingsChange(merged);
         window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
@@ -311,6 +313,29 @@ export function SettingsDialog({
                   )}
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">难度级别</label>
+              <select
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                value={settings.level}
+                onChange={(e) =>
+                  onSettingsChange({ ...settings, level: e.target.value })
+                }
+              >
+                <option value="">自动检测</option>
+                <option value="四级">四级 (CET-4)</option>
+                <option value="六级">六级 (CET-6)</option>
+                <option value="考研">考研</option>
+                <option value="雅思">雅思 (IELTS)</option>
+                <option value="托福">托福 (TOEFL)</option>
+                <option value="GRE">GRE</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                设定后，AI 将按对应学术标准进行严苛评判；选&ldquo;自动检测&rdquo;则由 AI
+                自动推断难度。
+              </p>
             </div>
           </TabsContent>
 
