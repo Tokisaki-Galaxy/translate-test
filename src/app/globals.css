@@ -43,3 +43,29 @@ body {
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
 }
+
+@keyframes sheet-slide-in-from-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes sheet-slide-out-to-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.sheet-content[data-state="open"] {
+  animation: sheet-slide-in-from-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sheet-content[data-state="closed"] {
+  animation: sheet-slide-out-to-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}

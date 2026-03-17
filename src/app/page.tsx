@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Settings as SettingsIcon,
+  Star,
   Trash2,
   Volume2,
 } from "lucide-react";
@@ -29,7 +30,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsDialog, type Settings } from "@/components/SettingsDialog";
-import { type Sentence, type Session, db } from "@/lib/db";
+import { FavoritesSheet } from "@/components/FavoritesSheet";
+import { type Favorite, type Sentence, type Session, db } from "@/lib/db";
 import {
   computeWeightedScore,
   measureSentenceLength,
@@ -38,6 +40,7 @@ import {
 } from "@/lib/polyglot";
 import { isTTSSupported, useTTS } from "@/lib/useTTS";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type SentenceState = Sentence & {
   id: number;
@@ -98,6 +101,10 @@ export default function Home() {
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  // Set of sentence IDs that are currently favorited
+  const [favoritedIds, setFavoritedIds] = useState<Set<number>>(new Set());
 
   const timersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const refreshKeyRef = useRef(0);
@@ -117,6 +124,13 @@ export default function Home() {
     const allSentences = await db.sentences.toArray();
     const result = computeWeightedScore(allSentences);
     setGlobalScore(result);
+  }, []);
+
+  const refreshFavorites = useCallback(async () => {
+    // Use reverse primary key order (auto-increment id = insertion order)
+    const favList = await db.favorites.orderBy(":id").reverse().toArray();
+    setFavorites(favList);
+    setFavoritedIds(new Set(favList.map((f) => f.sentenceId)));
   }, []);
 
   const refreshSessions = useCallback(
@@ -179,7 +193,8 @@ export default function Home() {
     }
 
     void refreshSessions();
-  }, [refreshSessions]);
+    void refreshFavorites();
+  }, [refreshSessions, refreshFavorites]);
 
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -350,6 +365,17 @@ export default function Home() {
         feedback: result.feedback ?? "",
       });
 
+      // If this sentence is favorited, sync the new score/feedback to favorites
+      const favRecord = await db.favorites.where("sentenceId").equals(id).first();
+      if (favRecord?.id !== undefined) {
+        await db.favorites.update(favRecord.id, {
+          score: result.score ?? null,
+          feedback: result.feedback ?? "",
+          translation: target.translation,
+        });
+        await refreshFavorites();
+      }
+
       const next = sentences.map((item) =>
         item.id === id
           ? {
@@ -390,6 +416,57 @@ export default function Home() {
       delete timersRef.current[id];
       void requestGrade(id);
     }, AUTO_GRADE_DELAY_MS);
+  }
+
+  async function toggleFavorite(sentence: SentenceState) {
+    if (favoritedIds.has(sentence.id)) {
+      // Un-favorite: find and delete the record
+      const favRecord = await db.favorites
+        .where("sentenceId")
+        .equals(sentence.id)
+        .first();
+      if (favRecord?.id !== undefined) {
+        await db.favorites.delete(favRecord.id);
+      }
+    } else {
+      if (!sentence.translation.trim()) {
+        toast("请先完成翻译再收藏该句子", { duration: 3000 });
+        return;
+      }
+      // Add to favorites
+      await db.favorites.add({
+        sentenceId: sentence.id,
+        sessionId: selectedSessionId!,
+        original: sentence.original,
+        translation: sentence.translation,
+        score: sentence.score,
+        feedback: sentence.feedback,
+        createdAt: Date.now(),
+      });
+    }
+    await refreshFavorites();
+  }
+
+  async function unfavorite(favoriteId: number) {
+    await db.favorites.delete(favoriteId);
+    await refreshFavorites();
+  }
+
+  async function clearAllFavorites() {
+    await db.favorites.clear();
+    await refreshFavorites();
+  }
+
+  function navigateToSentence(sessionId: number, sentenceId: number) {
+    void refreshSessions(sessionId).then(() => {
+      // Wait for the DOM to update then scroll to the sentence
+      setTimeout(() => {
+        const el = document.querySelector<HTMLElement>(
+          `[data-sentence-id="${sentenceId}"]`,
+        );
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    });
   }
 
   return (
@@ -537,16 +614,32 @@ export default function Home() {
             </div>
           </section>
 
-          {/* Settings Button */}
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full gap-2"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <SettingsIcon className="h-4 w-4" />
-            设置
-          </Button>
+          {/* Settings and Favorites Buttons */}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 gap-2"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <SettingsIcon className="h-4 w-4" />
+              设置
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2 px-3"
+              onClick={() => setFavoritesOpen(true)}
+              title="收藏夹"
+            >
+              <Star
+                className={cn(
+                  "h-4 w-4",
+                  favorites.length > 0 && "fill-yellow-400 text-yellow-400",
+                )}
+              />
+            </Button>
+          </div>
         </SidebarFooter>
       </Sidebar>
 
@@ -560,6 +653,16 @@ export default function Home() {
         onModelsChange={setModels}
         onSessionsRefresh={() => refreshSessions()}
         SETTINGS_KEY={SETTINGS_KEY}
+      />
+
+      {/* ── Favorites Sheet ── */}
+      <FavoritesSheet
+        open={favoritesOpen}
+        onOpenChange={setFavoritesOpen}
+        favorites={favorites}
+        onUnfavorite={unfavorite}
+        onClearAll={clearAllFavorites}
+        onNavigate={navigateToSentence}
       />
 
       {/* ── Main Content ── */}
@@ -628,14 +731,42 @@ export default function Home() {
                 {sentences.map((sentence, index) => (
                   <motion.article
                     key={`${refreshKeyRef.current}-${sentence.id}`}
+                    data-sentence-id={sentence.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{
                       delay: Math.min(index * 0.04, 0.4),
                       duration: 0.2,
                     }}
-                    className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:grid-cols-[1fr_220px]"
+                    className="relative grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:grid-cols-[1fr_220px]"
                   >
+                    {/* Star / Favorite button */}
+                    <button
+                      type="button"
+                      title={
+                        favoritedIds.has(sentence.id) ? "取消收藏" : "收藏"
+                      }
+                      aria-label={
+                        favoritedIds.has(sentence.id) ? "取消收藏" : "收藏"
+                      }
+                      onClick={() => void toggleFavorite(sentence)}
+                      className={cn(
+                        "absolute right-3 top-3 rounded p-1 transition-colors",
+                        favoritedIds.has(sentence.id)
+                          ? "text-yellow-400 hover:text-yellow-500"
+                          : sentence.translation.trim()
+                            ? "text-muted-foreground hover:text-yellow-400"
+                            : "opacity-30 text-muted-foreground cursor-not-allowed",
+                      )}
+                    >
+                      <Star
+                        className={cn(
+                          "h-4 w-4",
+                          favoritedIds.has(sentence.id) && "fill-current",
+                        )}
+                      />
+                    </button>
+
                     <div className="space-y-2">
                       {(() => {
                         const sentenceLabel = `${index + 1}. ${sentence.original}`;

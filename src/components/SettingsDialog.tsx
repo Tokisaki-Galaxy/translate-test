@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type Sentence, type Session, db } from "@/lib/db";
+import { type Favorite, type Sentence, type Session, db } from "@/lib/db";
 import { cleanTTSText, isTTSSupported } from "@/lib/useTTS";
 
 export type Settings = {
@@ -154,6 +154,10 @@ export function SettingsDialog({
         zip.file(`session_${session.id}.json`, JSON.stringify(backup, null, 2));
       }
 
+      // File: favorites.json
+      const favoritesData = await db.favorites.toArray();
+      zip.file("favorites.json", JSON.stringify(favoritesData, null, 2));
+
       const blob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -242,6 +246,30 @@ export function SettingsDialog({
             feedback: sentence.feedback,
             length: sentence.length,
           });
+        }
+      }
+
+      // Merge favorites from backup
+      const favoritesFile = zip.file("favorites.json");
+      if (favoritesFile) {
+        const raw = await favoritesFile.async("string");
+        const importedFavorites = JSON.parse(raw) as Favorite[];
+        const existingFavorites = await db.favorites.toArray();
+        const existingSentenceIds = new Set(
+          existingFavorites.map((f) => f.sentenceId),
+        );
+        for (const fav of importedFavorites) {
+          if (!existingSentenceIds.has(fav.sentenceId)) {
+            await db.favorites.add({
+              sentenceId: fav.sentenceId,
+              sessionId: fav.sessionId,
+              original: fav.original,
+              translation: fav.translation,
+              score: fav.score,
+              feedback: fav.feedback,
+              createdAt: fav.createdAt ?? Date.now(),
+            });
+          }
         }
       }
 
