@@ -13,7 +13,7 @@ import {
   Loader2,
   Pencil,
   Plus,
-  RefreshCw,
+  Settings as SettingsIcon,
   Trash2,
 } from "lucide-react";
 
@@ -27,6 +27,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { Textarea } from "@/components/ui/textarea";
+import { SettingsDialog, type Settings } from "@/components/SettingsDialog";
 import { type Sentence, type Session, db } from "@/lib/db";
 import {
   computeWeightedScore,
@@ -40,12 +41,6 @@ type SentenceState = Sentence & {
   id: number;
   loading: boolean;
   savedTranslation: string;
-};
-
-type Settings = {
-  apiKey: string;
-  apiBase: string;
-  model: string;
 };
 
 const SETTINGS_KEY = "polyglot_settings";
@@ -89,7 +84,6 @@ export default function Home() {
   const [articleInput, setArticleInput] = useState("");
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [models, setModels] = useState<string[]>(["gpt-4o-mini"]);
-  const [probing, setProbing] = useState(false);
   // "edit" = textarea visible, "test" = sentence cards visible
   const [mode, setMode] = useState<"edit" | "test">("edit");
   // Global weighted average from all sessions
@@ -97,6 +91,7 @@ export default function Home() {
   // Which session title is being edited
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const timersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const refreshKeyRef = useRef(0);
@@ -385,39 +380,6 @@ export default function Home() {
     }, AUTO_GRADE_DELAY_MS);
   }
 
-  async function probeModels() {
-    if (!settings.apiKey.trim()) {
-      return;
-    }
-
-    setProbing(true);
-    try {
-      const response = await fetch("/api/models", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          apiKey: settings.apiKey,
-          apiBase: settings.apiBase,
-        }),
-      });
-
-      const result = (await response.json()) as { models?: string[] };
-      if (!response.ok || !Array.isArray(result.models)) {
-        throw new Error("模型探测失败");
-      }
-
-      const sorted = [...result.models].sort((a, b) => a.localeCompare(b));
-      setModels(sorted);
-      if (sorted.length > 0 && !sorted.includes(settings.model)) {
-        setSettings((prev) => ({ ...prev, model: sorted[0] }));
-      }
-    } finally {
-      setProbing(false);
-    }
-  }
-
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* ── Left Sidebar ── */}
@@ -459,9 +421,7 @@ export default function Home() {
                 <button
                   type="button"
                   className="min-w-0 flex-1 text-left"
-                  onClick={() =>
-                    session.id && void refreshSessions(session.id)
-                  }
+                  onClick={() => session.id && void refreshSessions(session.id)}
                 >
                   {editingTitleId === session.id ? (
                     <Input
@@ -527,62 +487,6 @@ export default function Home() {
         </SidebarContent>
 
         <SidebarFooter>
-          {/* Settings */}
-          <section className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              设置
-            </h3>
-            <Input
-              placeholder="OpenAI API Key"
-              type="password"
-              value={settings.apiKey}
-              onChange={(event) =>
-                setSettings((prev) => ({ ...prev, apiKey: event.target.value }))
-              }
-            />
-            <Input
-              placeholder="https://api.openai.com/v1"
-              value={settings.apiBase}
-              onChange={(event) =>
-                setSettings((prev) => ({
-                  ...prev,
-                  apiBase: event.target.value,
-                }))
-              }
-            />
-            <div className="flex gap-2">
-              <select
-                className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-                value={settings.model}
-                onChange={(event) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    model: event.target.value,
-                  }))
-                }
-              >
-                {models.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void probeModels()}
-                disabled={probing}
-              >
-                {probing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          </section>
-
           {/* Statistics Dashboard */}
           <section className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -595,7 +499,10 @@ export default function Home() {
                     当前会话
                   </span>
                   <span
-                    className={cn("font-semibold tabular-nums", scoreColor(currentScore))}
+                    className={cn(
+                      "font-semibold tabular-nums",
+                      scoreColor(currentScore),
+                    )}
                   >
                     <AnimatedScore score={currentScore} />
                   </span>
@@ -606,7 +513,10 @@ export default function Home() {
                     全局表现
                   </span>
                   <span
-                    className={cn("font-semibold tabular-nums", scoreColor(globalScore))}
+                    className={cn(
+                      "font-semibold tabular-nums",
+                      scoreColor(globalScore),
+                    )}
                   >
                     <AnimatedScore score={globalScore} />
                   </span>
@@ -614,8 +524,31 @@ export default function Home() {
               </div>
             </div>
           </section>
+
+          {/* Settings Button */}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <SettingsIcon className="h-4 w-4" />
+            设置
+          </Button>
         </SidebarFooter>
       </Sidebar>
+
+      {/* ── Settings Dialog ── */}
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={settings}
+        onSettingsChange={setSettings}
+        models={models}
+        onModelsChange={setModels}
+        onSessionsRefresh={() => refreshSessions()}
+        SETTINGS_KEY={SETTINGS_KEY}
+      />
 
       {/* ── Main Content ── */}
       <SidebarInset className="w-full md:ml-80">
@@ -685,7 +618,10 @@ export default function Home() {
                     key={`${refreshKeyRef.current}-${sentence.id}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(index * 0.04, 0.4), duration: 0.2 }}
+                    transition={{
+                      delay: Math.min(index * 0.04, 0.4),
+                      duration: 0.2,
+                    }}
                     className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:grid-cols-[1fr_220px]"
                   >
                     <div className="space-y-2">
