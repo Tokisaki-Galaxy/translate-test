@@ -106,6 +106,7 @@ export default function Home() {
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   // Set of sentence IDs that are currently favorited
@@ -120,6 +121,27 @@ export default function Home() {
   useEffect(() => {
     selectedSessionIdRef.current = selectedSessionId;
   }, [selectedSessionId]);
+
+  useEffect(() => {
+    let rafId: number | null = null;
+    const handleScroll = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        const threshold = 100;
+        const atBottom =
+          window.innerHeight + window.scrollY >=
+          document.documentElement.scrollHeight - threshold;
+        setIsNearBottom(atBottom);
+        rafId = null;
+      });
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   // Compute global weighted average from all sentences in IndexedDB
   const refreshGlobalScore = useCallback(async () => {
@@ -895,24 +917,17 @@ export default function Home() {
         </div>
 
         <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-background/80 px-4 py-3 backdrop-blur md:left-80 md:px-8">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between">
-            <p
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                scoreColor(currentScore),
-              )}
-            >
-              当前文章加权总分：
-              <AnimatedScore score={currentScore} />
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            >
-              <ArrowUp className="h-4 w-4" /> 回到顶部
-            </Button>
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-end">
+            {isNearBottom && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              >
+                <ArrowUp className="h-4 w-4" /> 回到顶部
+              </Button>
+            )}
           </div>
         </footer>
       </SidebarInset>
