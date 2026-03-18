@@ -13,7 +13,9 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Settings as SettingsIcon,
+  Star,
   Trash2,
   Volume2,
 } from "lucide-react";
@@ -29,7 +31,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsDialog, type Settings } from "@/components/SettingsDialog";
-import { type Sentence, type Session, db } from "@/lib/db";
+import { FavoritesSheet } from "@/components/FavoritesSheet";
+import { type Favorite, type Sentence, type Session, db } from "@/lib/db";
 import {
   computeWeightedScore,
   measureSentenceLength,
@@ -37,17 +40,22 @@ import {
   segmentSentences,
 } from "@/lib/polyglot";
 import { isTTSSupported, useTTS } from "@/lib/useTTS";
+import { parseAndValidateResponse } from "@/lib/grading";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type SentenceState = Sentence & {
   id: number;
   loading: boolean;
+  loadingStatus: string;
+  gradeFailed: boolean;
   savedTranslation: string;
 };
 
 const SETTINGS_KEY = "polyglot_settings";
 const SESSION_TITLE_MAX_CHARS = 24;
 const AUTO_GRADE_DELAY_MS = 5000;
+const MAX_RETRIES = 2;
 
 const defaultSettings: Settings = {
   apiKey: "",
@@ -99,15 +107,16 @@ export default function Home() {
   const [editingTitleValue, setEditingTitleValue] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(false);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  // Set of sentence IDs that are currently favorited
+  const [favoritedIds, setFavoritedIds] = useState<Set<number>>(new Set());
 
   const timersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const refreshKeyRef = useRef(0);
   const selectedSessionIdRef = useRef<number | null>(null);
 
-  const { playingId, speak } = useTTS(
-    settings.ttsVoiceURI,
-    settings.ttsRate,
-  );
+  const { playingId, speak } = useTTS(settings.ttsVoiceURI, settings.ttsRate);
 
   useEffect(() => {
     selectedSessionIdRef.current = selectedSessionId;
@@ -139,6 +148,13 @@ export default function Home() {
     const allSentences = await db.sentences.toArray();
     const result = computeWeightedScore(allSentences);
     setGlobalScore(result);
+  }, []);
+
+  const refreshFavorites = useCallback(async () => {
+    // Use reverse primary key order (auto-increment id = insertion order)
+    const favList = await db.favorites.orderBy(":id").reverse().toArray();
+    setFavorites(favList);
+    setFavoritedIds(new Set(favList.map((f) => f.sentenceId)));
   }, []);
 
   const refreshSessions = useCallback(
@@ -175,6 +191,8 @@ export default function Home() {
         .map((sentence) => ({
           ...sentence,
           loading: false,
+          loadingStatus: "",
+          gradeFailed: false,
           savedTranslation: sentence.translation,
         }));
       setSentences(mapped);
@@ -201,7 +219,8 @@ export default function Home() {
     }
 
     void refreshSessions();
-  }, [refreshSessions]);
+    void refreshFavorites();
+  }, [refreshSessions, refreshFavorites]);
 
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -314,16 +333,29 @@ export default function Home() {
     }
   }
 
-  async function requestGrade(id: number) {
+  async function requestGradingWithRetry(id: number, retryCount = 0) {
+    const sessionId = selectedSessionId;
     const target = sentences.find((item) => item.id === id);
 
-    if (!target || !target.translation.trim() || !selectedSessionId) {
+    if (!target || !target.translation.trim() || !sessionId) {
       return;
     }
 
+    const statusMessage =
+      retryCount === 0
+        ? "评分中..."
+        : `解析失败，正在尝试重新评分 (第 ${retryCount}/${MAX_RETRIES} 次)...`;
+
     setSentences((prev) =>
-      prev.map((sentence) =>
-        sentence.id === id ? { ...sentence, loading: true } : sentence,
+      prev.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              loading: true,
+              loadingStatus: statusMessage,
+              gradeFailed: false,
+            }
+          : s,
       ),
     );
 
@@ -343,59 +375,84 @@ export default function Home() {
         }),
       });
 
-      const result = (await response.json()) as {
-        score?: number;
-        feedback?: string;
-        error?: string;
-      };
-      if (!response.ok || typeof result.score !== "number") {
-        throw new Error(result.error ?? "评分失败");
+      const rawData = (await response.json()) as unknown;
+
+      if (!response.ok) {
+        const err = rawData as { error?: string };
+        throw new Error(err.error ?? "评分失败");
       }
 
+      const result = parseAndValidateResponse(rawData);
+
       setSentences((prev) =>
-        prev.map((sentence) =>
-          sentence.id === id
+        prev.map((s) =>
+          s.id === id
             ? {
-                ...sentence,
-                score: result.score ?? null,
-                feedback: result.feedback ?? "",
+                ...s,
+                score: result.score,
+                feedback: result.feedback,
                 loading: false,
-                savedTranslation: sentence.translation,
+                loadingStatus: "",
+                gradeFailed: false,
+                savedTranslation: target.translation,
               }
-            : sentence,
+            : s,
         ),
       );
 
       await db.sentences.update(id, {
         translation: target.translation,
         score: result.score,
-        feedback: result.feedback ?? "",
+        feedback: result.feedback,
       });
+
+      // If this sentence is favorited, sync the new score/feedback to favorites
+      const favRecord = await db.favorites.where("sentenceId").equals(id).first();
+      if (favRecord?.id !== undefined) {
+        await db.favorites.update(favRecord.id, {
+          score: result.score ?? null,
+          feedback: result.feedback ?? "",
+          translation: target.translation,
+        });
+        await refreshFavorites();
+      }
 
       const next = sentences.map((item) =>
         item.id === id
           ? {
               ...item,
               translation: target.translation,
-              score: result.score ?? null,
-              feedback: result.feedback ?? "",
+              score: result.score,
+              feedback: result.feedback,
               loading: false,
+              loadingStatus: "",
+              gradeFailed: false,
               savedTranslation: target.translation,
             }
           : item,
       );
 
-      await syncSessionScore(selectedSessionId, next);
+      await syncSessionScore(sessionId, next);
     } catch (error) {
+      if (retryCount < MAX_RETRIES) {
+        console.warn(
+          `解析失败，正在进行第 ${retryCount + 1} 次递归重试...`,
+          error,
+        );
+        return requestGradingWithRetry(id, retryCount + 1);
+      }
+
       setSentences((prev) =>
-        prev.map((sentence) =>
-          sentence.id === id
+        prev.map((s) =>
+          s.id === id
             ? {
-                ...sentence,
+                ...s,
                 loading: false,
+                loadingStatus: "",
+                gradeFailed: true,
                 feedback: error instanceof Error ? error.message : "评分失败",
               }
-            : sentence,
+            : s,
         ),
       );
     }
@@ -410,8 +467,59 @@ export default function Home() {
     cancelPendingScore(id);
     timersRef.current[id] = setTimeout(() => {
       delete timersRef.current[id];
-      void requestGrade(id);
+      void requestGradingWithRetry(id);
     }, AUTO_GRADE_DELAY_MS);
+  }
+
+  async function toggleFavorite(sentence: SentenceState) {
+    if (favoritedIds.has(sentence.id)) {
+      // Un-favorite: find and delete the record
+      const favRecord = await db.favorites
+        .where("sentenceId")
+        .equals(sentence.id)
+        .first();
+      if (favRecord?.id !== undefined) {
+        await db.favorites.delete(favRecord.id);
+      }
+    } else {
+      if (!sentence.translation.trim()) {
+        toast("请先完成翻译再收藏该句子", { duration: 3000 });
+        return;
+      }
+      // Add to favorites
+      await db.favorites.add({
+        sentenceId: sentence.id,
+        sessionId: selectedSessionId!,
+        original: sentence.original,
+        translation: sentence.translation,
+        score: sentence.score,
+        feedback: sentence.feedback,
+        createdAt: Date.now(),
+      });
+    }
+    await refreshFavorites();
+  }
+
+  async function unfavorite(favoriteId: number) {
+    await db.favorites.delete(favoriteId);
+    await refreshFavorites();
+  }
+
+  async function clearAllFavorites() {
+    await db.favorites.clear();
+    await refreshFavorites();
+  }
+
+  function navigateToSentence(sessionId: number, sentenceId: number) {
+    void refreshSessions(sessionId).then(() => {
+      // Wait for the DOM to update then scroll to the sentence
+      setTimeout(() => {
+        const el = document.querySelector<HTMLElement>(
+          `[data-sentence-id="${sentenceId}"]`,
+        );
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    });
   }
 
   return (
@@ -559,16 +667,32 @@ export default function Home() {
             </div>
           </section>
 
-          {/* Settings Button */}
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full gap-2"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <SettingsIcon className="h-4 w-4" />
-            设置
-          </Button>
+          {/* Settings and Favorites Buttons */}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 gap-2"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <SettingsIcon className="h-4 w-4" />
+              设置
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2 px-3"
+              onClick={() => setFavoritesOpen(true)}
+              title="收藏夹"
+            >
+              <Star
+                className={cn(
+                  "h-4 w-4",
+                  favorites.length > 0 && "fill-yellow-400 text-yellow-400",
+                )}
+              />
+            </Button>
+          </div>
         </SidebarFooter>
       </Sidebar>
 
@@ -582,6 +706,16 @@ export default function Home() {
         onModelsChange={setModels}
         onSessionsRefresh={() => refreshSessions()}
         SETTINGS_KEY={SETTINGS_KEY}
+      />
+
+      {/* ── Favorites Sheet ── */}
+      <FavoritesSheet
+        open={favoritesOpen}
+        onOpenChange={setFavoritesOpen}
+        favorites={favorites}
+        onUnfavorite={unfavorite}
+        onClearAll={clearAllFavorites}
+        onNavigate={navigateToSentence}
       />
 
       {/* ── Main Content ── */}
@@ -650,14 +784,42 @@ export default function Home() {
                 {sentences.map((sentence, index) => (
                   <motion.article
                     key={`${refreshKeyRef.current}-${sentence.id}`}
+                    data-sentence-id={sentence.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{
                       delay: Math.min(index * 0.04, 0.4),
                       duration: 0.2,
                     }}
-                    className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:grid-cols-[1fr_220px]"
+                    className="relative grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:grid-cols-[1fr_220px]"
                   >
+                    {/* Star / Favorite button */}
+                    <button
+                      type="button"
+                      title={
+                        favoritedIds.has(sentence.id) ? "取消收藏" : "收藏"
+                      }
+                      aria-label={
+                        favoritedIds.has(sentence.id) ? "取消收藏" : "收藏"
+                      }
+                      onClick={() => void toggleFavorite(sentence)}
+                      className={cn(
+                        "absolute right-3 top-3 rounded p-1 transition-colors",
+                        favoritedIds.has(sentence.id)
+                          ? "text-yellow-400 hover:text-yellow-500"
+                          : sentence.translation.trim()
+                            ? "text-muted-foreground hover:text-yellow-400"
+                            : "opacity-30 text-muted-foreground cursor-not-allowed",
+                      )}
+                    >
+                      <Star
+                        className={cn(
+                          "h-4 w-4",
+                          favoritedIds.has(sentence.id) && "fill-current",
+                        )}
+                      />
+                    </button>
+
                     <div className="space-y-2">
                       {(() => {
                         const sentenceLabel = `${index + 1}. ${sentence.original}`;
@@ -671,7 +833,9 @@ export default function Home() {
                                 type="button"
                                 title="朗读原文"
                                 aria-label="朗读原文"
-                                onClick={() => speak(sentence.id, sentenceLabel)}
+                                onClick={() =>
+                                  speak(sentence.id, sentenceLabel)
+                                }
                                 className={cn(
                                   "mt-0.5 shrink-0 rounded p-1 transition-colors",
                                   playingId === sentence.id
@@ -682,7 +846,8 @@ export default function Home() {
                                 <Volume2
                                   className={cn(
                                     "h-4 w-4",
-                                    playingId === sentence.id && "animate-pulse",
+                                    playingId === sentence.id &&
+                                      "animate-pulse",
                                   )}
                                 />
                               </button>
@@ -701,22 +866,47 @@ export default function Home() {
                       />
                     </div>
                     <div className="space-y-1 border-l border-border pl-3 text-sm">
-                      <p
-                        className={cn(
-                          "font-semibold tabular-nums",
-                          sentence.loading && "animate-pulse",
-                          scoreColor(sentence.score),
+                      <div className="flex items-center justify-between gap-1">
+                        <p
+                          className={cn(
+                            "font-semibold tabular-nums",
+                            sentence.loading && "animate-pulse",
+                            sentence.gradeFailed
+                              ? "text-destructive"
+                              : scoreColor(sentence.score),
+                          )}
+                        >
+                          {sentence.gradeFailed ? (
+                            "评分失败"
+                          ) : (
+                            <>
+                              分值:{" "}
+                              {sentence.loading ? (
+                                <Loader2 className="inline h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <AnimatedScore score={sentence.score} />
+                              )}
+                            </>
+                          )}
+                        </p>
+                        {sentence.gradeFailed && (
+                          <button
+                            type="button"
+                            title="手动重试"
+                            aria-label="手动重试"
+                            onClick={() =>
+                              void requestGradingWithRetry(sentence.id)
+                            }
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </button>
                         )}
-                      >
-                        分值:{" "}
-                        {sentence.loading ? (
-                          <Loader2 className="inline h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <AnimatedScore score={sentence.score} />
-                        )}
-                      </p>
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        {sentence.feedback || "等待评分"}
+                        {sentence.loading
+                          ? sentence.loadingStatus
+                          : sentence.feedback || "等待评分"}
                       </p>
                     </div>
                   </motion.article>

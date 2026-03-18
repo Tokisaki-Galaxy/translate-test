@@ -17,15 +17,32 @@ export type Sentence = {
   length: number;
 };
 
+export type Favorite = {
+  id?: number;
+  sentenceId: number;
+  sessionId: number;
+  original: string;
+  translation: string;
+  score: number | null;
+  feedback: string;
+  createdAt: number;
+};
+
 class PolyglotDatabase extends Dexie {
   sessions!: EntityTable<Session, "id">;
   sentences!: EntityTable<Sentence, "id">;
+  favorites!: EntityTable<Favorite, "id">;
 
   constructor() {
     super("polyglot_test_db");
     this.version(1).stores({
       sessions: "++id, createdAt",
       sentences: "++id, sessionId",
+    });
+    this.version(2).stores({
+      sessions: "++id, createdAt",
+      sentences: "++id, sessionId",
+      favorites: "++id, sentenceId",
     });
   }
 }
