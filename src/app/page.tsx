@@ -106,7 +106,7 @@ export default function Home() {
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [isNearBottom, setIsNearBottom] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   // Set of sentence IDs that are currently favorited
@@ -127,11 +127,7 @@ export default function Home() {
     const handleScroll = () => {
       if (rafId !== null) return;
       rafId = requestAnimationFrame(() => {
-        const threshold = 100;
-        const atBottom =
-          window.innerHeight + window.scrollY >=
-          document.documentElement.scrollHeight - threshold;
-        setIsNearBottom(atBottom);
+        setShowScrollButton(window.scrollY > 300);
         rafId = null;
       });
     };
@@ -741,7 +737,7 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="p-4 pb-28 md:p-8">
+        <div className="p-4 md:p-8">
           <AnimatePresence mode="wait">
             {mode === "edit" ? (
               <motion.section
@@ -916,20 +912,19 @@ export default function Home() {
           </AnimatePresence>
         </div>
 
-        <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-background/80 px-4 py-3 backdrop-blur md:left-80 md:px-8">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-end">
-            {isNearBottom && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              >
-                <ArrowUp className="h-4 w-4" /> 回到顶部
-              </Button>
-            )}
-          </div>
-        </footer>
+        <button
+          type="button"
+          aria-hidden={!showScrollButton}
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-1 rounded-md border border-border bg-background/80 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur transition-all duration-300",
+            showScrollButton
+              ? "pointer-events-auto scale-100 opacity-100"
+              : "pointer-events-none scale-95 opacity-0",
+          )}
+        >
+          <ArrowUp className="h-4 w-4" /> 回到顶部
+        </button>
       </SidebarInset>
     </div>
   );
