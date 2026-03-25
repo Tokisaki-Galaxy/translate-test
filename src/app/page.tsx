@@ -273,7 +273,7 @@ export default function Home() {
     }
 
     const createdAt = Date.now();
-      const title =
+    const title =
       segmented[0].slice(0, SESSION_TITLE_MAX_CHARS) ||
       `${t("newTest")} ${new Date(createdAt).toLocaleString()}`;
     const sessionId = await db.sessions.add({
@@ -429,7 +429,10 @@ export default function Home() {
       });
 
       // If this sentence is favorited, sync the new score/feedback to favorites
-      const favRecord = await db.favorites.where("sentenceId").equals(id).first();
+      const favRecord = await db.favorites
+        .where("sentenceId")
+        .equals(id)
+        .first();
       if (favRecord?.id !== undefined) {
         await db.favorites.update(favRecord.id, {
           score: result.score ?? null,
@@ -558,7 +561,9 @@ export default function Home() {
               <h2 className="text-lg font-semibold tracking-tight">
                 {t("appName")}
               </h2>
-              <p className="text-xs text-muted-foreground">{t("sessionHistory")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("sessionHistory")}
+              </p>
             </div>
             <Button
               type="button"
@@ -795,13 +800,17 @@ export default function Home() {
                 className="mx-auto max-w-2xl space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm"
               >
                 <div>
-                  <h3 className="text-base font-semibold">{t("pasteArticle")}</h3>
+                  <h3 className="text-base font-semibold">
+                    {t("pasteArticle")}
+                  </h3>
                   <p className="text-sm text-muted-foreground">
                     {t("pasteArticleDesc")}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground">{t("guideTitle")}</p>
+                  <p className="font-medium text-foreground">
+                    {t("guideTitle")}
+                  </p>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     <li>{t("guideStep1")}</li>
                     <li>{t("guideStep2")}</li>

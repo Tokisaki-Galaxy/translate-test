@@ -422,9 +422,7 @@ export function SettingsDialog({
                 <option value="academic">{t("levelAcademic")}</option>
                 <option value="professional">{t("levelProfessional")}</option>
               </select>
-              <p className="text-xs text-muted-foreground">
-                {t("levelHint")}
-              </p>
+              <p className="text-xs text-muted-foreground">{t("levelHint")}</p>
             </div>
           </TabsContent>
 
@@ -438,7 +436,9 @@ export function SettingsDialog({
               <>
                 {/* TTS Enable toggle */}
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">{t("ttsEnabled")}</label>
+                  <label className="text-sm font-medium">
+                    {t("ttsEnabled")}
+                  </label>
                   <button
                     type="button"
                     role="switch"
@@ -455,9 +455,7 @@ export function SettingsDialog({
                   >
                     <span
                       className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
-                        settings.ttsEnabled
-                          ? "translate-x-5"
-                          : "translate-x-0"
+                        settings.ttsEnabled ? "translate-x-5" : "translate-x-0"
                       }`}
                     />
                   </button>
@@ -465,7 +463,9 @@ export function SettingsDialog({
 
                 {/* Voice selector */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">{t("voiceSource")}</label>
+                  <label className="text-sm font-medium">
+                    {t("voiceSource")}
+                  </label>
                   <div className="flex gap-2">
                     <select
                       className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm"
@@ -501,7 +501,9 @@ export function SettingsDialog({
                 {/* Speech rate slider */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">{t("speechRate")}</label>
+                    <label className="text-sm font-medium">
+                      {t("speechRate")}
+                    </label>
                     <span className="text-sm tabular-nums text-muted-foreground">
                       {settings.ttsRate.toFixed(1)}x
                     </span>
@@ -532,9 +534,7 @@ export function SettingsDialog({
 
           {/* ── Data Management Tab ── */}
           <TabsContent value="data" className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {t("backupDesc")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("backupDesc")}</p>
 
             <div className="space-y-3">
               <Button
@@ -580,9 +580,7 @@ export function SettingsDialog({
 
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                {t("backupWarning")}
-              </span>
+              <span>{t("backupWarning")}</span>
             </div>
           </TabsContent>
         </Tabs>

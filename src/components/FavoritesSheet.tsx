@@ -101,7 +101,9 @@ export function FavoritesSheet({
                       type="button"
                       title={t("favoriteRemoveHint")}
                       className="rounded p-1 text-yellow-400 hover:text-muted-foreground transition-colors"
-                      onClick={() => fav.id !== undefined && void onUnfavorite(fav.id)}
+                      onClick={() =>
+                        fav.id !== undefined && void onUnfavorite(fav.id)
+                      }
                     >
                       <Star className="h-3.5 w-3.5 fill-current" />
                     </button>

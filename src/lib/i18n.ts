@@ -114,7 +114,8 @@ const translations = {
     favorites: "Favorites",
     currentArticleScore: "Current article weighted score:",
     pasteArticle: "Paste Article",
-    pasteArticleDesc: "Paste an article to practice translation, then process it.",
+    pasteArticleDesc:
+      "Paste an article to practice translation, then process it.",
     guideTitle: "Quick Guide",
     guideStep1: "Paste an English article and split it into sentences.",
     guideStep2: "Translate sentence by sentence, with optional TTS playback.",
@@ -181,7 +182,8 @@ const translations = {
     favoritesCount: "{{count}} favorites",
     clear: "Clear",
     favoritesCleared: "Favorites cleared",
-    favoriteHint: "Click the star at top-right of a sentence card to favorite it",
+    favoriteHint:
+      "Click the star at top-right of a sentence card to favorite it",
     jumpToSentence: "Jump to sentence",
     scoreLoading: "Scoring...",
   },
@@ -210,13 +212,15 @@ const translations = {
     favoriteAddHint: "お気に入り",
     favoriteRemoveHint: "お気に入り解除",
     readOriginal: "原文を読み上げ",
-    inputTranslationPlaceholder: "翻訳を入力し、フォーカスアウト後5秒で自動採点",
+    inputTranslationPlaceholder:
+      "翻訳を入力し、フォーカスアウト後5秒で自動採点",
     gradingFailed: "採点失敗",
     scoreLabel: "スコア: ",
     retryManual: "再試行",
     waitingForGrade: "採点待ち",
     scrollToTop: "トップへ戻る",
-    favoriteNeedTranslation: "先に翻訳を入力してからお気に入りに追加してください",
+    favoriteNeedTranslation:
+      "先に翻訳を入力してからお気に入りに追加してください",
     gradingInProgress: "採点中...",
     retryingGrade: "解析失敗、再採点中 ({{retry}}/{{max}})...",
     settingsTitle: "設定",
@@ -243,7 +247,8 @@ const translations = {
     levelProfessional: "上級（GRE / CATTI）",
     levelHint:
       "難易度を設定するとその基準で採点します。自動では AI が推定します。",
-    ttsUnsupported: "お使いのブラウザは Web Speech API をサポートしていません。",
+    ttsUnsupported:
+      "お使いのブラウザは Web Speech API をサポートしていません。",
     ttsEnabled: "読み上げを有効化",
     voiceSource: "音声",
     defaultVoice: "デフォルト音声",
@@ -253,10 +258,13 @@ const translations = {
       "セッションと設定（API Key 含む）をバックアップとしてエクスポート/インポートします。",
     exportBackup: "バックアップをエクスポート",
     importBackup: "バックアップをインポート",
-    backupWarning: "バックアップには API Key が含まれます。安全に保管してください。",
-    backupContainsKey: "バックアップには API Key が含まれます。安全に保管してください。",
+    backupWarning:
+      "バックアップには API Key が含まれます。安全に保管してください。",
+    backupContainsKey:
+      "バックアップには API Key が含まれます。安全に保管してください。",
     exportSuccess: "バックアップをエクスポートしました。",
-    importSuccess: "バックアップをインポートしました。サイドバーを更新しました。",
+    importSuccess:
+      "バックアップをインポートしました。サイドバーを更新しました。",
     exportFailed: "エクスポート失敗: {{message}}",
     importFailed: "インポート失敗: {{message}}",
     unknownError: "不明なエラー",
