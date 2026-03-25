@@ -10,6 +10,7 @@ import {
 } from "framer-motion";
 import {
   ArrowUp,
+  Github,
   Loader2,
   Pencil,
   Plus,
@@ -41,6 +42,12 @@ import {
 } from "@/lib/polyglot";
 import { isTTSSupported, useTTS } from "@/lib/useTTS";
 import { parseAndValidateResponse } from "@/lib/grading";
+import {
+  createTranslator,
+  detectLocaleFromNavigator,
+  isLocale,
+  type Locale,
+} from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -53,9 +60,11 @@ type SentenceState = Sentence & {
 };
 
 const SETTINGS_KEY = "polyglot_settings";
+const LOCALE_KEY = "polyglot_locale";
 const SESSION_TITLE_MAX_CHARS = 24;
 const AUTO_GRADE_DELAY_MS = 5000;
 const MAX_RETRIES = 2;
+const REPO_URL = "https://github.com/Tokisaki-Galaxy/Sentens";
 
 const defaultSettings: Settings = {
   apiKey: "",
@@ -106,6 +115,7 @@ export default function Home() {
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [locale, setLocale] = useState<Locale>("zh");
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
@@ -117,6 +127,7 @@ export default function Home() {
   const selectedSessionIdRef = useRef<number | null>(null);
 
   const { playingId, speak } = useTTS(settings.ttsVoiceURI, settings.ttsRate);
+  const t = useMemo(() => createTranslator(locale), [locale]);
 
   useEffect(() => {
     selectedSessionIdRef.current = selectedSessionId;
@@ -216,11 +227,23 @@ export default function Home() {
 
     void refreshSessions();
     void refreshFavorites();
+
+    const cachedLocale = window.localStorage.getItem(LOCALE_KEY);
+    if (isLocale(cachedLocale)) {
+      setLocale(cachedLocale);
+    } else {
+      setLocale(detectLocaleFromNavigator());
+    }
   }, [refreshSessions, refreshFavorites]);
 
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    window.localStorage.setItem(LOCALE_KEY, locale);
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   useEffect(() => {
     const activeTimers = timersRef.current;
@@ -252,7 +275,7 @@ export default function Home() {
     const createdAt = Date.now();
     const title =
       segmented[0].slice(0, SESSION_TITLE_MAX_CHARS) ||
-      `Session ${new Date(createdAt).toLocaleString()}`;
+      `${t("newTest")} ${new Date(createdAt).toLocaleString()}`;
     const sessionId = await db.sessions.add({
       title,
       createdAt,
@@ -339,8 +362,11 @@ export default function Home() {
 
     const statusMessage =
       retryCount === 0
-        ? "评分中..."
-        : `解析失败，正在尝试重新评分 (第 ${retryCount}/${MAX_RETRIES} 次)...`;
+        ? t("gradingInProgress")
+        : t("retryingGrade", {
+            retry: retryCount,
+            max: MAX_RETRIES,
+          });
 
     setSentences((prev) =>
       prev.map((s) =>
@@ -375,7 +401,7 @@ export default function Home() {
 
       if (!response.ok) {
         const err = rawData as { error?: string };
-        throw new Error(err.error ?? "评分失败");
+        throw new Error(err.error ?? t("gradingFailed"));
       }
 
       const result = parseAndValidateResponse(rawData);
@@ -403,7 +429,10 @@ export default function Home() {
       });
 
       // If this sentence is favorited, sync the new score/feedback to favorites
-      const favRecord = await db.favorites.where("sentenceId").equals(id).first();
+      const favRecord = await db.favorites
+        .where("sentenceId")
+        .equals(id)
+        .first();
       if (favRecord?.id !== undefined) {
         await db.favorites.update(favRecord.id, {
           score: result.score ?? null,
@@ -432,7 +461,10 @@ export default function Home() {
     } catch (error) {
       if (retryCount < MAX_RETRIES) {
         console.warn(
-          `解析失败，正在进行第 ${retryCount + 1} 次递归重试...`,
+          t("retryingGrade", {
+            retry: retryCount + 1,
+            max: MAX_RETRIES,
+          }),
           error,
         );
         return requestGradingWithRetry(id, retryCount + 1);
@@ -446,7 +478,8 @@ export default function Home() {
                 loading: false,
                 loadingStatus: "",
                 gradeFailed: true,
-                feedback: error instanceof Error ? error.message : "评分失败",
+                feedback:
+                  error instanceof Error ? error.message : t("gradingFailed"),
               }
             : s,
         ),
@@ -479,7 +512,7 @@ export default function Home() {
       }
     } else {
       if (!sentence.translation.trim()) {
-        toast("请先完成翻译再收藏该句子", { duration: 3000 });
+        toast(t("favoriteNeedTranslation"), { duration: 3000 });
         return;
       }
       // Add to favorites
@@ -526,9 +559,11 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">
-                PolyglotTest
+                {t("appName")}
               </h2>
-              <p className="text-xs text-muted-foreground">会话历史</p>
+              <p className="text-xs text-muted-foreground">
+                {t("sessionHistory")}
+              </p>
             </div>
             <Button
               type="button"
@@ -536,10 +571,10 @@ export default function Home() {
               variant="outline"
               className="h-8 gap-1 rounded-lg text-xs"
               onClick={startNewTest}
-              title="新测试"
+              title={t("newTest")}
             >
               <Plus className="h-3.5 w-3.5" />
-              新测试
+              {t("newTest")}
             </Button>
           </div>
         </SidebarHeader>
@@ -588,8 +623,8 @@ export default function Home() {
                   )}
                   <p className={cn("text-xs", scoreColor(session.totalScore))}>
                     {session.totalScore === null
-                      ? "未评分"
-                      : `加权分: ${session.totalScore}`}
+                      ? t("ungraded")
+                      : t("weightedScore", { score: session.totalScore })}
                   </p>
                 </button>
 
@@ -598,7 +633,7 @@ export default function Home() {
                   <button
                     type="button"
                     className="rounded p-1 text-muted-foreground hover:text-foreground"
-                    title="编辑标题"
+                    title={t("editTitle")}
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditingTitleId(session.id ?? null);
@@ -610,7 +645,7 @@ export default function Home() {
                   <button
                     type="button"
                     className="rounded p-1 text-muted-foreground hover:text-red-500"
-                    title="删除"
+                    title={t("delete")}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (session.id) void deleteSession(session.id);
@@ -628,13 +663,13 @@ export default function Home() {
           {/* Statistics Dashboard */}
           <section className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              统计面板
+              {t("statisticsPanel")}
             </h3>
             <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
-                    当前会话
+                    {t("currentSession")}
                   </span>
                   <span
                     className={cn(
@@ -648,7 +683,7 @@ export default function Home() {
                 <div className="h-px bg-border" />
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
-                    全局表现
+                    {t("globalPerformance")}
                   </span>
                   <span
                     className={cn(
@@ -672,14 +707,14 @@ export default function Home() {
               onClick={() => setSettingsOpen(true)}
             >
               <SettingsIcon className="h-4 w-4" />
-              设置
+              {t("settings")}
             </Button>
             <Button
               type="button"
               variant="outline"
               className="gap-2 px-3"
               onClick={() => setFavoritesOpen(true)}
-              title="收藏夹"
+              title={t("favorites")}
             >
               <Star
                 className={cn(
@@ -702,6 +737,9 @@ export default function Home() {
         onModelsChange={setModels}
         onSessionsRefresh={() => refreshSessions()}
         SETTINGS_KEY={SETTINGS_KEY}
+        locale={locale}
+        onLocaleChange={setLocale}
+        t={t}
       />
 
       {/* ── Favorites Sheet ── */}
@@ -712,16 +750,29 @@ export default function Home() {
         onUnfavorite={unfavorite}
         onClearAll={clearAllFavorites}
         onNavigate={navigateToSentence}
+        t={t}
       />
 
       {/* ── Main Content ── */}
       <SidebarInset className="w-full md:ml-80">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur md:px-8">
           <p className={cn("text-sm font-semibold", scoreColor(currentScore))}>
-            当前文章加权总分：
+            {t("currentArticleScore")}
             <AnimatedScore score={currentScore} />
           </p>
           <div className="flex items-center gap-2">
+            <Button
+              asChild
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1"
+            >
+              <a href={REPO_URL} target="_blank" rel="noreferrer">
+                <Github className="h-4 w-4" />
+                GitHub
+              </a>
+            </Button>
             {mode === "test" && (
               <Button
                 type="button"
@@ -731,7 +782,7 @@ export default function Home() {
                 onClick={startNewTest}
               >
                 <Plus className="h-4 w-4" />
-                新测试
+                {t("newTest")}
               </Button>
             )}
           </div>
@@ -749,23 +800,35 @@ export default function Home() {
                 className="mx-auto max-w-2xl space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm"
               >
                 <div>
-                  <h3 className="text-base font-semibold">粘贴文章</h3>
+                  <h3 className="text-base font-semibold">
+                    {t("pasteArticle")}
+                  </h3>
                   <p className="text-sm text-muted-foreground">
-                    粘贴需要练习翻译的文章，然后点击处理文章。
+                    {t("pasteArticleDesc")}
                   </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">
+                    {t("guideTitle")}
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                    <li>{t("guideStep1")}</li>
+                    <li>{t("guideStep2")}</li>
+                    <li>{t("guideStep3")}</li>
+                  </ul>
                 </div>
                 <Textarea
                   value={articleInput}
                   onChange={(event) => setArticleInput(event.target.value)}
                   className="min-h-48 resize-none text-sm leading-relaxed"
-                  placeholder="在此粘贴文章内容…"
+                  placeholder={t("pastePlaceholder")}
                 />
                 <Button
                   type="button"
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                   onClick={() => void processArticle()}
                 >
-                  开始处理
+                  {t("startProcessing")}
                 </Button>
               </motion.section>
             ) : (
@@ -793,10 +856,14 @@ export default function Home() {
                     <button
                       type="button"
                       title={
-                        favoritedIds.has(sentence.id) ? "取消收藏" : "收藏"
+                        favoritedIds.has(sentence.id)
+                          ? t("favoriteRemoveHint")
+                          : t("favoriteAddHint")
                       }
                       aria-label={
-                        favoritedIds.has(sentence.id) ? "取消收藏" : "收藏"
+                        favoritedIds.has(sentence.id)
+                          ? t("favoriteRemoveHint")
+                          : t("favoriteAddHint")
                       }
                       onClick={() => void toggleFavorite(sentence)}
                       className={cn(
@@ -827,8 +894,8 @@ export default function Home() {
                             {settings.ttsEnabled && isTTSSupported() && (
                               <button
                                 type="button"
-                                title="朗读原文"
-                                aria-label="朗读原文"
+                                title={t("readOriginal")}
+                                aria-label={t("readOriginal")}
                                 onClick={() =>
                                   speak(sentence.id, sentenceLabel)
                                 }
@@ -858,7 +925,7 @@ export default function Home() {
                         }
                         onBlur={() => scheduleScoring(sentence.id)}
                         onFocus={() => cancelPendingScore(sentence.id)}
-                        placeholder="输入你的翻译，失焦后 5 秒自动评分"
+                        placeholder={t("inputTranslationPlaceholder")}
                       />
                     </div>
                     <div className="space-y-1 border-l border-border pl-3 text-sm">
@@ -873,10 +940,10 @@ export default function Home() {
                           )}
                         >
                           {sentence.gradeFailed ? (
-                            "评分失败"
+                            t("gradingFailed")
                           ) : (
                             <>
-                              分值:{" "}
+                              {t("scoreLabel")}
                               {sentence.loading ? (
                                 <Loader2 className="inline h-3.5 w-3.5 animate-spin" />
                               ) : (
@@ -888,8 +955,8 @@ export default function Home() {
                         {sentence.gradeFailed && (
                           <button
                             type="button"
-                            title="手动重试"
-                            aria-label="手动重试"
+                            title={t("retryManual")}
+                            aria-label={t("retryManual")}
                             onClick={() =>
                               void requestGradingWithRetry(sentence.id)
                             }
@@ -902,7 +969,7 @@ export default function Home() {
                       <p className="text-xs text-muted-foreground">
                         {sentence.loading
                           ? sentence.loadingStatus
-                          : sentence.feedback || "等待评分"}
+                          : sentence.feedback || t("waitingForGrade")}
                       </p>
                     </div>
                   </motion.article>
@@ -923,7 +990,7 @@ export default function Home() {
               : "pointer-events-none scale-95 opacity-0",
           )}
         >
-          <ArrowUp className="h-4 w-4" /> 回到顶部
+          <ArrowUp className="h-4 w-4" /> {t("scrollToTop")}
         </button>
       </SidebarInset>
     </div>

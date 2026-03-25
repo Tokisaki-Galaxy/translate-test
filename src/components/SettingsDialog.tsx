@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Favorite, type Sentence, type Session, db } from "@/lib/db";
+import { type Locale, type Translator } from "@/lib/i18n";
 import { cleanTTSText, isTTSSupported } from "@/lib/useTTS";
 
 export type Settings = {
@@ -46,6 +47,9 @@ type SettingsDialogProps = {
   onModelsChange: (models: string[]) => void;
   onSessionsRefresh: () => Promise<void>;
   SETTINGS_KEY: string;
+  locale: Locale;
+  onLocaleChange: (locale: Locale) => void;
+  t: Translator;
 };
 
 type SessionBackup = {
@@ -62,6 +66,9 @@ export function SettingsDialog({
   onModelsChange,
   onSessionsRefresh,
   SETTINGS_KEY,
+  locale,
+  onLocaleChange,
+  t,
 }: SettingsDialogProps) {
   const [showApiKey, setShowApiKey] = useState(false);
   const [probing, setProbing] = useState(false);
@@ -86,7 +93,7 @@ export function SettingsDialog({
   function previewVoice() {
     if (!ttsSupported) return;
     window.speechSynthesis.cancel();
-    const text = cleanTTSText("1. 这是所选语音的预览效果。");
+    const text = cleanTTSText(`1. ${t("previewVoice")}`);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = settings.ttsRate;
     if (settings.ttsVoiceURI) {
@@ -115,8 +122,8 @@ export function SettingsDialog({
       if (!response.ok || !Array.isArray(result.models)) {
         throw new Error(
           result.error
-            ? `模型探测失败 (${response.status}): ${result.error}`
-            : `模型探测失败 (HTTP ${response.status})`,
+            ? `${t("modelProbeFailed")} (${response.status}): ${result.error}`
+            : `${t("modelProbeFailed")} (HTTP ${response.status})`,
         );
       }
       const sorted = [...result.models].sort((a, b) => a.localeCompare(b));
@@ -132,7 +139,7 @@ export function SettingsDialog({
   async function handleExport() {
     setExporting(true);
     try {
-      toast("备份文件包含您的 API Key，请妥善保管。", {
+      toast(t("backupContainsKey"), {
         icon: <ShieldCheck className="h-4 w-4 text-amber-500" />,
         duration: 5000,
       });
@@ -166,10 +173,12 @@ export function SettingsDialog({
       anchor.click();
       URL.revokeObjectURL(url);
 
-      toast.success("备份导出成功！");
+      toast.success(t("exportSuccess"));
     } catch (error) {
       toast.error(
-        `导出失败：${error instanceof Error ? error.message : "未知错误"}`,
+        t("exportFailed", {
+          message: error instanceof Error ? error.message : t("unknownError"),
+        }),
       );
     } finally {
       setExporting(false);
@@ -224,8 +233,8 @@ export function SettingsDialog({
           do {
             title =
               counter === 1
-                ? `${base} (Imported)`
-                : `${base} (Imported ${counter})`;
+                ? `${base} (${t("importedSuffix")})`
+                : `${base} (${t("importedSuffix")} ${counter})`;
             counter++;
           } while (existingTitles.has(title));
         }
@@ -274,10 +283,12 @@ export function SettingsDialog({
       }
 
       await onSessionsRefresh();
-      toast.success("备份导入成功！侧边栏已更新。");
+      toast.success(t("importSuccess"));
     } catch (error) {
       toast.error(
-        `导入失败：${error instanceof Error ? error.message : "未知错误"}`,
+        t("importFailed", {
+          message: error instanceof Error ? error.message : t("unknownError"),
+        }),
       );
     } finally {
       setImporting(false);
@@ -291,31 +302,47 @@ export function SettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>设置</DialogTitle>
-          <DialogDescription>管理您的偏好设置与数据备份。</DialogDescription>
+          <DialogTitle>{t("settingsTitle")}</DialogTitle>
+          <DialogDescription>{t("settingsDesc")}</DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="preferences" className="mt-2">
           <TabsList className="w-full">
             <TabsTrigger value="preferences" className="flex-1">
-              偏好设置
+              {t("tabPreferences")}
             </TabsTrigger>
             <TabsTrigger value="voice" className="flex-1">
-              语音
+              {t("tabVoice")}
             </TabsTrigger>
             <TabsTrigger value="data" className="flex-1">
-              数据安全
+              {t("tabData")}
             </TabsTrigger>
           </TabsList>
 
           {/* ── Preferences Tab ── */}
           <TabsContent value="preferences" className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">API Key</label>
+              <label className="text-sm font-medium">{t("language")}</label>
+              <select
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                value={locale}
+                onChange={(e) => onLocaleChange(e.target.value as Locale)}
+              >
+                <option value="zh">{t("languageZh")}</option>
+                <option value="en">{t("languageEn")}</option>
+                <option value="ja">{t("languageJa")}</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {t("languageAutoHint")}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t("apiKey")}</label>
               <div className="relative">
                 <Input
                   type={showApiKey ? "text" : "password"}
-                  placeholder="输入您的 OpenAI API Key"
+                  placeholder={t("apiKeyPlaceholder")}
                   value={settings.apiKey}
                   onChange={(e) =>
                     onSettingsChange({ ...settings, apiKey: e.target.value })
@@ -326,7 +353,7 @@ export function SettingsDialog({
                   type="button"
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowApiKey((v) => !v)}
-                  aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"}
+                  aria-label={showApiKey ? t("hideApiKey") : t("showApiKey")}
                 >
                   {showApiKey ? (
                     <EyeOff className="h-4 w-4" />
@@ -338,7 +365,7 @@ export function SettingsDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">API Base URL</label>
+              <label className="text-sm font-medium">{t("apiBaseUrl")}</label>
               <Input
                 placeholder="https://api.openai.com/v1"
                 value={settings.apiBase}
@@ -349,7 +376,7 @@ export function SettingsDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">模型</label>
+              <label className="text-sm font-medium">{t("model")}</label>
               <div className="flex gap-2">
                 <select
                   className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm"
@@ -370,7 +397,7 @@ export function SettingsDialog({
                   size="sm"
                   onClick={() => void probeModels()}
                   disabled={probing}
-                  title="探测可用模型"
+                  title={t("probeModels")}
                 >
                   {probing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -382,7 +409,7 @@ export function SettingsDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">难度级别</label>
+              <label className="text-sm font-medium">{t("level")}</label>
               <select
                 className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
                 value={settings.level}
@@ -390,14 +417,12 @@ export function SettingsDialog({
                   onSettingsChange({ ...settings, level: e.target.value })
                 }
               >
-                <option value="">自动检测</option>
-                <option value="standard">标准（四级 / 六级）</option>
-                <option value="academic">学术（考研 / 雅思 / 托福）</option>
-                <option value="professional">专业（GRE / CATTI）</option>
+                <option value="">{t("levelAuto")}</option>
+                <option value="standard">{t("levelStandard")}</option>
+                <option value="academic">{t("levelAcademic")}</option>
+                <option value="professional">{t("levelProfessional")}</option>
               </select>
-              <p className="text-xs text-muted-foreground">
-                设定后，AI 将按对应档次标准评判；选&ldquo;自动检测&rdquo;则由 AI 自动推断难度。
-              </p>
+              <p className="text-xs text-muted-foreground">{t("levelHint")}</p>
             </div>
           </TabsContent>
 
@@ -405,13 +430,15 @@ export function SettingsDialog({
           <TabsContent value="voice" className="space-y-4">
             {!ttsSupported ? (
               <p className="text-sm text-muted-foreground">
-                您的浏览器不支持 Web Speech API，语音功能不可用。
+                {t("ttsUnsupported")}
               </p>
             ) : (
               <>
                 {/* TTS Enable toggle */}
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">启用朗读功能</label>
+                  <label className="text-sm font-medium">
+                    {t("ttsEnabled")}
+                  </label>
                   <button
                     type="button"
                     role="switch"
@@ -428,9 +455,7 @@ export function SettingsDialog({
                   >
                     <span
                       className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
-                        settings.ttsEnabled
-                          ? "translate-x-5"
-                          : "translate-x-0"
+                        settings.ttsEnabled ? "translate-x-5" : "translate-x-0"
                       }`}
                     />
                   </button>
@@ -438,7 +463,9 @@ export function SettingsDialog({
 
                 {/* Voice selector */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">语音来源</label>
+                  <label className="text-sm font-medium">
+                    {t("voiceSource")}
+                  </label>
                   <div className="flex gap-2">
                     <select
                       className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm"
@@ -451,7 +478,7 @@ export function SettingsDialog({
                       }
                       disabled={!settings.ttsEnabled}
                     >
-                      <option value="">默认语音</option>
+                      <option value="">{t("defaultVoice")}</option>
                       {voices.map((voice) => (
                         <option key={voice.voiceURI} value={voice.voiceURI}>
                           {voice.name} ({voice.lang})
@@ -464,7 +491,7 @@ export function SettingsDialog({
                       size="sm"
                       onClick={previewVoice}
                       disabled={!settings.ttsEnabled}
-                      title="预览语音"
+                      title={t("previewVoice")}
                     >
                       <Volume2 className="h-4 w-4" />
                     </Button>
@@ -474,7 +501,9 @@ export function SettingsDialog({
                 {/* Speech rate slider */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">语速</label>
+                    <label className="text-sm font-medium">
+                      {t("speechRate")}
+                    </label>
                     <span className="text-sm tabular-nums text-muted-foreground">
                       {settings.ttsRate.toFixed(1)}x
                     </span>
@@ -505,9 +534,7 @@ export function SettingsDialog({
 
           {/* ── Data Management Tab ── */}
           <TabsContent value="data" className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              导出或导入包含所有会话和设置（含 API Key）的备份文件。
-            </p>
+            <p className="text-sm text-muted-foreground">{t("backupDesc")}</p>
 
             <div className="space-y-3">
               <Button
@@ -521,7 +548,7 @@ export function SettingsDialog({
                 ) : (
                   <Download className="h-4 w-4" />
                 )}
-                导出备份
+                {t("exportBackup")}
               </Button>
 
               <Button
@@ -536,7 +563,7 @@ export function SettingsDialog({
                 ) : (
                   <Upload className="h-4 w-4" />
                 )}
-                导入备份
+                {t("importBackup")}
               </Button>
 
               <input
@@ -553,9 +580,7 @@ export function SettingsDialog({
 
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                备份文件中包含您的 API Key，请妥善保管，勿分享给他人。
-              </span>
+              <span>{t("backupWarning")}</span>
             </div>
           </TabsContent>
         </Tabs>

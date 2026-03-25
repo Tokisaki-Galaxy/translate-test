@@ -12,6 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { type Favorite } from "@/lib/db";
+import { type Translator } from "@/lib/i18n";
 import { scoreColor } from "@/lib/polyglot";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ type FavoritesSheetProps = {
   onUnfavorite: (favoriteId: number) => Promise<void>;
   onClearAll: () => Promise<void>;
   onNavigate: (sessionId: number, sentenceId: number) => void;
+  t: Translator;
 };
 
 export function FavoritesSheet({
@@ -31,11 +33,12 @@ export function FavoritesSheet({
   onUnfavorite,
   onClearAll,
   onNavigate,
+  t,
 }: FavoritesSheetProps) {
   async function handleClearAll() {
     if (favorites.length === 0) return;
     await onClearAll();
-    toast.success("已清空收藏夹");
+    toast.success(t("favoritesCleared"));
   }
 
   return (
@@ -44,11 +47,11 @@ export function FavoritesSheet({
         <SheetHeader>
           <div className="flex items-center justify-between pr-8">
             <div>
-              <SheetTitle>收藏夹</SheetTitle>
+              <SheetTitle>{t("favorites")}</SheetTitle>
               <SheetDescription className="mt-1">
                 {favorites.length === 0
-                  ? "暂无收藏"
-                  : `共 ${favorites.length} 条收藏`}
+                  ? t("favoritesEmpty")
+                  : t("favoritesCount", { count: favorites.length })}
               </SheetDescription>
             </div>
             {favorites.length > 0 && (
@@ -60,7 +63,7 @@ export function FavoritesSheet({
                 onClick={() => void handleClearAll()}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                清空
+                {t("clear")}
               </Button>
             )}
           </div>
@@ -70,7 +73,7 @@ export function FavoritesSheet({
           {favorites.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Star className="mb-3 h-10 w-10 opacity-20" />
-              <p className="text-sm">点击句子卡片右上角的星星来收藏</p>
+              <p className="text-sm">{t("favoriteHint")}</p>
             </div>
           ) : (
             favorites.map((fav) => (
@@ -85,7 +88,7 @@ export function FavoritesSheet({
                   <div className="flex shrink-0 gap-1">
                     <button
                       type="button"
-                      title="跳转到原句"
+                      title={t("jumpToSentence")}
                       className="rounded p-1 text-muted-foreground hover:text-primary transition-colors"
                       onClick={() => {
                         onNavigate(fav.sessionId, fav.sentenceId);
@@ -96,9 +99,11 @@ export function FavoritesSheet({
                     </button>
                     <button
                       type="button"
-                      title="取消收藏"
+                      title={t("favoriteRemoveHint")}
                       className="rounded p-1 text-yellow-400 hover:text-muted-foreground transition-colors"
-                      onClick={() => fav.id !== undefined && void onUnfavorite(fav.id)}
+                      onClick={() =>
+                        fav.id !== undefined && void onUnfavorite(fav.id)
+                      }
                     >
                       <Star className="h-3.5 w-3.5 fill-current" />
                     </button>
@@ -118,7 +123,9 @@ export function FavoritesSheet({
                       scoreColor(fav.score),
                     )}
                   >
-                    {fav.score === null ? "评分加载中..." : `分值: ${fav.score}`}
+                    {fav.score === null
+                      ? t("scoreLoading")
+                      : `${t("scoreLabel")}${fav.score}`}
                   </span>
                   {fav.feedback && (
                     <span className="text-xs text-muted-foreground line-clamp-1 max-w-[60%]">
