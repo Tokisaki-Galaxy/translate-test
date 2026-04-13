@@ -852,36 +852,54 @@ export default function Home() {
                     }}
                     className="relative grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:grid-cols-[1fr_220px]"
                   >
-                    {/* Star / Favorite button */}
-                    <button
-                      type="button"
-                      title={
-                        favoritedIds.has(sentence.id)
-                          ? t("favoriteRemoveHint")
-                          : t("favoriteAddHint")
-                      }
-                      aria-label={
-                        favoritedIds.has(sentence.id)
-                          ? t("favoriteRemoveHint")
-                          : t("favoriteAddHint")
-                      }
-                      onClick={() => void toggleFavorite(sentence)}
-                      className={cn(
-                        "absolute right-3 top-3 rounded p-1 transition-colors",
-                        favoritedIds.has(sentence.id)
-                          ? "text-yellow-400 hover:text-yellow-500"
-                          : sentence.translation.trim()
-                            ? "text-muted-foreground hover:text-yellow-400"
-                            : "opacity-30 text-muted-foreground cursor-not-allowed",
-                      )}
-                    >
-                      <Star
+                    {/* Retry and Star / Favorite buttons */}
+                    <div className="absolute right-3 top-3 flex items-center gap-1">
+                      <button
+                        type="button"
+                        title={t("retryManual")}
+                        aria-label={t("retryManual")}
+                        onClick={() =>
+                          void requestGradingWithRetry(sentence.id)
+                        }
                         className={cn(
-                          "h-4 w-4",
-                          favoritedIds.has(sentence.id) && "fill-current",
+                          "rounded p-1 transition-colors",
+                          sentence.gradeFailed
+                            ? "text-destructive hover:text-destructive/80"
+                            : "text-muted-foreground hover:text-foreground",
                         )}
-                      />
-                    </button>
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        title={
+                          favoritedIds.has(sentence.id)
+                            ? t("favoriteRemoveHint")
+                            : t("favoriteAddHint")
+                        }
+                        aria-label={
+                          favoritedIds.has(sentence.id)
+                            ? t("favoriteRemoveHint")
+                            : t("favoriteAddHint")
+                        }
+                        onClick={() => void toggleFavorite(sentence)}
+                        className={cn(
+                          "rounded p-1 transition-colors",
+                          favoritedIds.has(sentence.id)
+                            ? "text-yellow-400 hover:text-yellow-500"
+                            : sentence.translation.trim()
+                              ? "text-muted-foreground hover:text-yellow-400"
+                              : "opacity-30 text-muted-foreground cursor-not-allowed",
+                        )}
+                      >
+                        <Star
+                          className={cn(
+                            "h-4 w-4",
+                            favoritedIds.has(sentence.id) && "fill-current",
+                          )}
+                        />
+                      </button>
+                    </div>
 
                     <div className="space-y-2">
                       {(() => {
@@ -952,19 +970,6 @@ export default function Home() {
                             </>
                           )}
                         </p>
-                        {sentence.gradeFailed && (
-                          <button
-                            type="button"
-                            title={t("retryManual")}
-                            aria-label={t("retryManual")}
-                            onClick={() =>
-                              void requestGradingWithRetry(sentence.id)
-                            }
-                            className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          </button>
-                        )}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {sentence.loading
