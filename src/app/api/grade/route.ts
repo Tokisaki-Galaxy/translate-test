@@ -56,10 +56,11 @@ ${difficultyContext}
 5. 中文代词不清：翻译中使用错误的性别第三方代词，她、他等，导致指代不明，此类不扣分。
 
 【输出格式要求】
-仅返回 "score|feedback" 格式。例如"65|原句take在此处为索取而非携带；漏译economists"。`;
+仅返回 "参考译文|分数|评语" 格式。例如"这是一个参考译文|65|原句take在此处为索取而非携带；漏译economists"。`;
 }
 
 export function parseModelResponse(content: string): {
+  referenceTranslation: string;
   score: number;
   feedback: string;
 } {
@@ -67,18 +68,40 @@ export function parseModelResponse(content: string): {
     .trim()
     .replace(/^```[\w]*\s*/gi, "")
     .replace(/\s*```$/gi, "");
-    
-  const separatorIndex = normalized.indexOf("|");
-  if (separatorIndex === -1) {
-    const scoreMatch = normalized.match(/(\d{1,3})/);
+  
+  // Split by | to get the three parts: referenceTranslation|score|feedback
+  const parts = normalized.split("|").map((p) => p.trim());
+  
+  if (parts.length < 2) {
+    // Fallback for old format (score|feedback)
+    const separatorIndex = normalized.indexOf("|");
+    if (separatorIndex === -1) {
+      const scoreMatch = normalized.match(/(\d{1,3})/);
+      return {
+        referenceTranslation: "",
+        score: scoreMatch ? Number(scoreMatch[1]) : 0,
+        feedback: normalized || "解析模型反馈失败，请重试。",
+      };
+    }
+    const rawScore = normalized.substring(0, separatorIndex).trim();
+    const feedback = normalized.substring(separatorIndex + 1).trim();
+    const scoreMatch = rawScore.match(/(\d+(?:\.\d+)?)/);
+    const score = scoreMatch ? Number(scoreMatch[1]) : NaN;
+    if (!Number.isFinite(score)) {
+      throw new Error("Invalid score format");
+    }
     return {
-      score: scoreMatch ? Number(scoreMatch[1]) : 0,
-      feedback: normalized || "解析模型反馈失败，请重试。",
+      referenceTranslation: "",
+      score: Math.max(0, Math.min(100, Math.round(score))),
+      feedback: feedback,
     };
   }
 
-  const rawScore = normalized.substring(0, separatorIndex).trim();
-  const feedback = normalized.substring(separatorIndex + 1).trim();
+  // New format: referenceTranslation|score|feedback
+  const referenceTranslation = parts[0];
+  const rawScore = parts[1];
+  const feedback = parts.slice(2).join("|").trim(); // In case feedback contains |
+
   const scoreMatch = rawScore.match(/(\d+(?:\.\d+)?)/);
   const score = scoreMatch ? Number(scoreMatch[1]) : NaN;
 
@@ -87,6 +110,7 @@ export function parseModelResponse(content: string): {
   }
 
   return {
+    referenceTranslation: referenceTranslation,
     score: Math.max(0, Math.min(100, Math.round(score))),
     feedback: feedback,
   };

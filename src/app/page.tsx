@@ -414,6 +414,7 @@ export default function Home() {
           s.id === id
             ? {
                 ...s,
+                referenceTranslation: result.referenceTranslation,
                 score: result.score,
                 feedback: result.feedback,
                 loading: false,
@@ -427,6 +428,7 @@ export default function Home() {
 
       await db.sentences.update(id, {
         translation: target.translation,
+        referenceTranslation: result.referenceTranslation,
         score: result.score,
         feedback: result.feedback,
       });
@@ -441,6 +443,7 @@ export default function Home() {
           score: result.score ?? null,
           feedback: result.feedback ?? "",
           translation: target.translation,
+          referenceTranslation: result.referenceTranslation,
         });
         await refreshFavorites();
       }
@@ -450,6 +453,7 @@ export default function Home() {
           ? {
               ...item,
               translation: target.translation,
+              referenceTranslation: result.referenceTranslation,
               score: result.score,
               feedback: result.feedback,
               loading: false,
@@ -948,6 +952,12 @@ export default function Home() {
                         onFocus={() => cancelPendingScore(sentence.id)}
                         placeholder={t("inputTranslationPlaceholder")}
                       />
+                      {sentence.referenceTranslation && (
+                        <p className="text-xs text-muted-foreground pt-2 border-t border-border">
+                          <span className="font-medium">参考译文：</span>
+                          {sentence.referenceTranslation}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-1 border-l border-border pl-3 text-sm">
                       <div className="flex items-center justify-between gap-1">

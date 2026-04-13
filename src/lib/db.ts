@@ -12,6 +12,7 @@ export type Sentence = {
   sessionId: number;
   original: string;
   translation: string;
+  referenceTranslation?: string;
   score: number | null;
   feedback: string;
   length: number;
@@ -23,6 +24,7 @@ export type Favorite = {
   sessionId: number;
   original: string;
   translation: string;
+  referenceTranslation?: string;
   score: number | null;
   feedback: string;
   createdAt: number;
