@@ -56,7 +56,7 @@ ${difficultyContext}
 5. 中文代词不清：翻译中使用错误的性别第三方代词，她、他等，导致指代不明，此类不扣分。
 
 【输出格式要求】
-仅返回 "参考译文|分数|评语" 格式。例如"这是一个参考译文|65|原句take在此处为索取而非携带；漏译economists"。`;
+仅返回 "参考译文|分数|评语" 格式。例如"数字界面的普遍存...|65|原句take在此处为索取而非携带；漏译economists。`;
 }
 
 export function parseModelResponse(content: string): {

@@ -955,7 +955,6 @@ export default function Home() {
                       />
                       {sentence.referenceTranslation && (
                         <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-                          <span className="font-medium">参考译文：</span>
                           {sentence.referenceTranslation}
                         </p>
                       )}
